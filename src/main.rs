@@ -4,9 +4,11 @@ mod ro_runtime;
 use bindings::Windows::Win32::System::SystemServices::*;
 use bindings::Windows::Win32::UI::MenusAndResources::HMENU;
 use bindings::Windows::Win32::UI::WindowsAndMessaging::*;
-use bindings::Windows::Win32::Graphics::Gdi::{UpdateWindow, HBRUSH};
+use bindings::Windows::Win32::Graphics::Gdi::*;
 use bindings::Windows::Win32::UI::DisplayDevices::RECT;
 use bindings::Windows::UI::Xaml::{Hosting::*, *};
+use bindings::Windows::UI::Colors;
+use bindings::Windows::UI::Xaml::Media::SolidColorBrush;
 use desktop_target::*;
 use std::ptr::null_mut;
 use windows::Interface;
@@ -54,15 +56,24 @@ fn run() -> windows::Result<()> {
     // Create the XAML content.
     let container = Controls::StackPanel::new()?;
 
-    // let s = container.Background()?;
+    {
+        let mut brush = SolidColorBrush::new()?;
+        brush.SetColor(Colors::LightGray()?)?;
+        container.SetBackground(brush)?;
+    }
 
-    // println!("{:?}", &container);
+    let mut tb = Controls::TextBlock::new()?;
+    tb.SetText("Hello World from Xaml Island!")?;
+    tb.SetVerticalAlignment(VerticalAlignment::Center)?;
+    tb.SetHorizontalAlignment(HorizontalAlignment::Center)?;
+    tb.SetFontSize(48.0)?;
+
+    container.Children()?.Append(tb)?;
+    container.UpdateLayout()?;
+    desktop_source.SetContent(&container)?;
 
     // let path = Uri::CreateUri("ms-appx:///Page.xaml")?;
     // Application::LoadComponent(&app, path)?;
-
-    // let grid = Controls::Grid::new()?;
-    // grid.SetPadding(40.0)?;
 
     unsafe {
         UpdateWindow(h_wnd);
@@ -136,6 +147,14 @@ pub extern "system" fn window_proc(
         match msg {
             WM_DESTROY => {
                 PostQuitMessage(0);
+                LRESULT(0)
+            }
+            WM_PAINT => {
+                let greetings = "Hello World in Win32!";
+                let mut ps = PAINTSTRUCT::default();
+                let hdc = BeginPaint(h_wnd, &mut ps);
+                TextOutW(hdc, 300, 5, greetings, 21);
+                EndPaint(h_wnd, &ps);
                 LRESULT(0)
             }
             WM_SIZE => {
