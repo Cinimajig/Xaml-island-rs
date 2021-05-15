@@ -1,16 +1,18 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod desktop_target;
 mod ro_runtime;
 
-use bindings::Windows::Win32::System::SystemServices::*;
+use bindings::Windows::Win32::UI::DisplayDevices::RECT;
 use bindings::Windows::Win32::UI::MenusAndResources::HMENU;
 use bindings::Windows::Win32::UI::WindowsAndMessaging::*;
-use bindings::Windows::Win32::Graphics::Gdi::*;
-use bindings::Windows::Win32::UI::DisplayDevices::RECT;
-use bindings::Windows::UI::Xaml::{Hosting::*, *};
 use bindings::Windows::UI::Colors;
 use bindings::Windows::UI::Xaml::Media::SolidColorBrush;
+use bindings::Windows::UI::Xaml::{Hosting::*, *};
+use bindings::Windows::{Win32::Graphics::Gdi::*, UI::Xaml::Markup::XamlReader};
+use bindings::Windows::{Win32::System::SystemServices::*, UI::Xaml::Controls::Page};
 use desktop_target::*;
-use std::ptr::null_mut;
+use std::{ptr::null_mut, thread::sleep};
 use windows::Interface;
 
 const WND_CLASS_NAME: &str = env!("CARGO_PKG_NAME");
@@ -42,38 +44,45 @@ fn run() -> windows::Result<()> {
     // to host WinRT XAML controls in any UI element that is associated with a window handle (HWND).
     let desktop_source = DesktopWindowXamlSource::new()?;
 
+    // Get handle to the core window.
     let interop = desktop_source.cast::<IDesktopWindowXamlSourceNative>()?;
 
-    interop.AttachToWindow(h_wnd.0 as windows::RawPtr)?;
+    // Parent the DesktopWindowXamlSource object to the current window.
+    interop.AttachToWindow(h_wnd)?;
 
     // This HWND will be the window handler for the XAML Island: A child window that contains XAML.
     // Get the new child window's HWND.
-    let h_wnd_xaml_island = HWND(interop.get_WindowHandle()? as isize);
+    let h_wnd_xaml_island = interop.get_WindowHandle()?;
 
     // Update the XAML Island window size because initially it is 0,0.
-    unsafe { SetWindowPos(h_wnd_xaml_island, HWND::NULL, 200, 100, 800, 200, SWP_SHOWWINDOW); }
+    unsafe {
+        SetWindowPos(
+            h_wnd_xaml_island,
+            HWND::NULL,
+            0,
+            0,
+            800,
+            200,
+            SWP_SHOWWINDOW,
+        );
+    }
 
     // Create the XAML content.
     let container = Controls::StackPanel::new()?;
 
-    {
-        let mut brush = SolidColorBrush::new()?;
-        brush.SetColor(Colors::LightGray()?)?;
-        container.SetBackground(brush)?;
-    }
+    let brush = SolidColorBrush::new()?;
+    brush.SetColor(Colors::LightGray()?)?;
+    container.SetBackground(brush)?;
 
-    let mut tb = Controls::TextBlock::new()?;
+    let tb = Controls::TextBlock::new()?;
     tb.SetText("Hello World from Xaml Island!")?;
     tb.SetVerticalAlignment(VerticalAlignment::Center)?;
     tb.SetHorizontalAlignment(HorizontalAlignment::Center)?;
     tb.SetFontSize(48.0)?;
-
     container.Children()?.Append(tb)?;
+
     container.UpdateLayout()?;
     desktop_source.SetContent(&container)?;
-
-    // let path = Uri::CreateUri("ms-appx:///Page.xaml")?;
-    // Application::LoadComponent(&app, path)?;
 
     unsafe {
         UpdateWindow(h_wnd);
@@ -92,7 +101,6 @@ fn run() -> windows::Result<()> {
 }
 
 fn create_window(h_instance: HINSTANCE, ptr: *mut u16) -> windows::Result<HWND> {
-
     let wc = WNDCLASSEXW {
         cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
         style: CS_VREDRAW | CS_HREDRAW,
@@ -149,18 +157,17 @@ pub extern "system" fn window_proc(
                 PostQuitMessage(0);
                 LRESULT(0)
             }
-            WM_PAINT => {
-                let greetings = "Hello World in Win32!";
-                let mut ps = PAINTSTRUCT::default();
-                let hdc = BeginPaint(h_wnd, &mut ps);
-                TextOutW(hdc, 300, 5, greetings, 21);
-                EndPaint(h_wnd, &ps);
-                LRESULT(0)
-            }
             WM_SIZE => {
                 let mut client_rect = RECT::default();
                 GetClientRect(h_wnd, &mut client_rect);
-                MoveWindow(CHILD_HWND, 200, 200, 400, 500, true);
+                MoveWindow(
+                    CHILD_HWND,
+                    0,
+                    0,
+                    client_rect.right,
+                    client_rect.bottom,
+                    true,
+                );
                 ShowWindow(CHILD_HWND, SW_SHOW);
                 LRESULT(0)
             }

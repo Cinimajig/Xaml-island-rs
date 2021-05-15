@@ -1,19 +1,20 @@
 #![allow(dead_code, non_snake_case)]
 
 use ::windows::{Abi, Guid, IUnknown, Interface, RawPtr, Result, HRESULT};
+use bindings::Windows::Win32::UI::WindowsAndMessaging::HWND;
 
 #[repr(transparent)]
 pub struct IDesktopWindowXamlSourceNative(IUnknown);
 
 impl IDesktopWindowXamlSourceNative {
-    pub fn AttachToWindow(&self, hwnd: RawPtr) -> Result<()> {
-        unsafe { (self.vtable().3)(self.abi(), hwnd).ok() }
+    pub fn AttachToWindow(&self, hwnd: HWND) -> Result<()> {
+        unsafe { (self.vtable().3)(self.abi(), hwnd.0 as RawPtr).ok() }
     }
 
-    pub fn get_WindowHandle(&self) -> Result<RawPtr> {
+    pub fn get_WindowHandle(&self) -> Result<HWND> {
         unsafe {
             let mut hwnd = std::ptr::null_mut();
-            (self.vtable().4)(self.abi(), &mut hwnd).and_then(|| hwnd)
+            (self.vtable().4)(self.abi(), &mut hwnd).and_then(|| HWND(hwnd as isize))
         }
     }
 }
